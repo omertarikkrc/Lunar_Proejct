@@ -22,7 +22,7 @@ r_park_M = RM + 260e3;
 
 v_circ_E = sqrt(mu_E / r_park_E);
 v_esc_E  = sqrt(2 * mu_E / r_park_E);
-deltaV   = v_esc_E - v_circ_E + 200;  % impulsive delta-V
+deltaV   = v_esc_E - v_circ_E ;  % impulsive delta-V
 
 %% SİMÜLASYON PARAMETRELERİ
 sim_duration = 6 * 24 * 3600;   % [s], 6 gün
@@ -30,7 +30,8 @@ tspan = [0 sim_duration];
 options = odeset('RelTol',1e-9,'AbsTol',1e-9);
 
 %% AÇI TARAMASI
-theta_range = linspace(deg2rad(224), deg2rad(227), 1000);
+%theta_range = linspace(deg2rad(224), deg2rad(227), 1000);
+theta_range=linspace(0, 2*pi, 100000);
 valid_theta = [];
 filtered_theta = [];
 

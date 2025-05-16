@@ -1,129 +1,217 @@
 clear; clc; close all;
 global m G n
 
-%% Sabitler ve kütleler
-n = 3;
-G = 6.6742867e-11;
-
-m1 = 5.9721426e24;    % Dünya
+%% Sabitler ve kÃ¼tleler
+n = 3;                % body sayÄ±sÄ±
+G = 6.6742867e-11;    %  Yer Ã§ekimi Sabiti
+m1 = 5.9721426e24;    % DÃ¼nya
 m2 = 7.3457576e22;    % Ay
-m3 = 1000;            % Uzay Aracý
-m = [m1 m2 m3];
+m3 = 1000;            % Uzay AracÄ±
+m = [m1 m2 m3];       % body mass matrix
 
-%% Yarýçaplar ve yörünge bilgileri
+%% YarÄ±Ã§aplar ve yÃ¶rÃ¼nge bilgileri
 RE = 6.3781366e6;
 RM = 1.7374e6;
 D_EM = 3.844e8;
 r_park_E = RE + 660e3;
 r_park_M = RM + 260e3;
 
-%% Açý ve deltaV verisini dýþ dosyadan al
+%% AÃ§Ä± ve deltaV verisini dÄ±ÅŸ dosyadan al
 load('valid_theta_list.mat', 'filtered_theta', 'deltaV');
-theta = filtered_theta(60);  % Ýstediðin açýyý buradan seç
+theta = filtered_theta(99);  % Ä°stediÄŸin aÃ§Ä±yÄ± buradan seÃ§
 
-%% Baþlangýç vektörü oluþturulmasý
+%% BaÅŸlangÄ±Ã§ vektÃ¶rÃ¼ oluÅŸturulmasÄ±
 b0 = initial_conditions(theta, deltaV, G, m1, m2, D_EM, r_park_E);
 
-%% Simülasyon süresi ve çözüm
-sim_duration = 3 * 24 * 3600;   % 6 gün
+%% SimÃ¼lasyon sÃ¼resi ve Ã§Ã¶zÃ¼m
+sim_duration = 3 * 24 * 3600;   
 tspan = [0 sim_duration];
-options = odeset('RelTol',1e-9,'AbsTol',1e-9);
+options = odeset('RelTol',1e-10,'AbsTol',1e-10);
 [T, Y] = ode45(@SystemsOfEquations, tspan, b0, options);
 
 
 
 
-%% Yörüngeleri çiz
+%% YÃ¶rÃ¼ngeleri Ã§iz
 figure; hold on; grid on;
-plot(Y(:,1), Y(:,2), 'r', 'DisplayName', 'Dünya');
+plot(Y(:,1), Y(:,2), 'r', 'DisplayName', 'DÃ¼nya');
 plot(Y(:,7), Y(:,8), 'b', 'DisplayName', 'Ay');
-plot(Y(:,13), Y(:,14), 'g', 'DisplayName', 'Uzay Aracý');
+plot(Y(:,13), Y(:,14), 'g', 'DisplayName', 'Uzay AracÄ±');
 legend show;
 xlabel('x [m]'); ylabel('y [m]');
 axis equal;
-title('Dünya-Ay-Uzay Aracý Yörünge Takibi');
+title('DÃ¼nya-Ay-Uzay AracÄ± YÃ¶rÃ¼nge Takibi');
 
-%% --- ANÝMASYONLU GÖSTERÝM ---
-figure;
-hold on; grid on;
-axis equal;
-xlabel('x [m]'); ylabel('y [m]');
-title('Yörünge Takibi (Animasyon)');
+% %% --- ANÄ°MASYONLU GÃ–STERÄ°M ---
+% figure;
+% hold on; grid on;
+% axis equal;
+% xlabel('x [m]'); ylabel('y [m]');
+% title('YÃ¶rÃ¼nge Takibi (Animasyon)');
+% 
+% % GÃ¶rÃ¼ÅŸ alanÄ± sabit
+% xlim([-2e8 8e8]);
+% ylim([-2e8 8e8]);
+% 
+% % Cisim ikonlarÄ±
+% planetD = plot(0, 0, 'b.', 'MarkerSize', 20, 'DisplayName', 'DÃ¼nya');
+% planetM = plot(0, 0, 'r.', 'MarkerSize', 12, 'DisplayName', 'Ay');
+% spacecraft = plot(0, 0, 'k.', 'MarkerSize', 8, 'DisplayName', 'Uzay AracÄ±');
+% 
+% % Ay yÃ¼zeyi dairesi
+% theta_circle = linspace(0, 2*pi, 100);
+% moon_surface = plot(0, 0, 'r-', 'LineWidth', 1.2, 'DisplayName', 'Ay YÃ¼zeyi');
+% moon_park_orbit=plot(0, 0, 'b-', 'LineWidth', 1.2, 'DisplayName', ' Park Ay Orbit');
+% % Ä°z takibi
+% traj = animatedline('Color', 'g', 'LineWidth', 1.5);
+% legend show;
+% 
+% % Animasyon dÃ¶ngÃ¼sÃ¼
+% for k = 1:50:length(T)
+%     % KoordinatlarÄ± al
+%     xM = Y(k,7); yM = Y(k,8);
+% 
+%     % Ay yÃ¼zey Ã§emberi
+%     x_circle = xM + RM * cos(theta_circle);
+%     y_circle = yM + RM * sin(theta_circle);
+%     %park orbit
+%     x_circle2 = xM + r_park_M * cos(theta_circle);
+%     y_circle2 = yM + r_park_M * sin(theta_circle);
+% 
+%     % GÃ¼ncellemeler
+%     set(planetD, 'XData', Y(k,1),  'YData', Y(k,2));
+%     set(planetM, 'XData', xM,      'YData', yM);
+%     set(spacecraft, 'XData', Y(k,13), 'YData', Y(k,14));
+%     set(moon_surface, 'XData', x_circle, 'YData', y_circle);
+%     set(moon_park_orbit, 'XData', x_circle2, 'YData', y_circle2);
+%     addpoints(traj, Y(k,13), Y(k,14));
+%     drawnow;
+%     pause(0.06);
+% end
+% %% --- UZAY ARACI MERKEZLÄ° ANÄ°MASYON ---(dÃ¼nyadan ayrÄ±lma ay yakalama)
+% figure;
+% hold on; grid on;
+% axis equal;
+% xlabel('x [m]'); ylabel('y [m]');
+% title('Uzay AracÄ± Merkezli Animasyon');
+% 
+% xlim([-5e7 5e7]); 
+% ylim([-5e7 5e7]);
+% 
+% % Grafik objeleri
+% planetD = plot(0, 0, 'b.', 'MarkerSize', 20, 'DisplayName', 'DÃ¼nya');
+% planetM = plot(0, 0, 'r.', 'MarkerSize', 12, 'DisplayName', 'Ay');
+% moon_surface = plot(0, 0, 'r--', 'LineWidth', 1.2, 'DisplayName', 'Ay YÃ¼zeyi');
+% moon_park_orbit=plot(0, 0, 'b-', 'LineWidth', 1.2, 'DisplayName', ' Park Ay Orbit');
+% traj = animatedline('Color', 'g', 'LineWidth', 1.5);
+% legend show;
+% 
+% % Ay yÃ¼zeyi Ã§emberi (relatif Ã§izilecek)
+% theta_circle = linspace(0, 2*pi, 100);
+% spacecraft = plot(0, 0, 'ko', 'MarkerSize', 6, 'MarkerFaceColor', 'k', 'DisplayName', 'Uzay AracÄ±');
+% for k = 1:50:length(T)
+% 
+% 
+%     % Mevcut uzay aracÄ± konumu
+%     x_sc = Y(k,13); y_sc = Y(k,14);
+% 
+%     % DiÄŸer cisimlerin uzay aracÄ±na gÃ¶re konumu
+%     xD = Y(k,1) - x_sc;  yD = Y(k,2) - y_sc;
+%     xM = Y(k,7) - x_sc;  yM = Y(k,8) - y_sc;
+% 
+%     % Ay yÃ¼zey Ã§emberi (Ay merkezli Ã§iz, uzay aracÄ±na gÃ¶re konumlandÄ±r)
+%     x_circle = xM + RM * cos(theta_circle);
+%     y_circle = yM + RM * sin(theta_circle);
+%     %park orbit
+%     x_circle2 = xM + r_park_M * cos(theta_circle);
+%     y_circle2 = yM + r_park_M * sin(theta_circle);
+% 
+% 
+%     % GÃ¼ncellemeler
+%     set(planetD, 'XData', xD, 'YData', yD);
+%     set(planetM, 'XData', xM, 'YData', yM);
+%     set(moon_surface, 'XData', x_circle, 'YData', y_circle);
+%     set(moon_park_orbit, 'XData', x_circle2, 'YData', y_circle2);
+%     addpoints(traj, 0, 0);  % Uzay aracÄ± hep merkezde (0,0)
+%     drawnow;
+%     pause(0.06);
+% end
+% 
 
-% Görüþ alaný sabit
-xlim([-2e8 8e8]);
-ylim([-2e8 8e8]);
+%% 2. delta V ateÅŸlemesi Ay yÃ¶rÃ¼ngesine oturma
 
-% Cisim ikonlarý
-planetD = plot(0, 0, 'b.', 'MarkerSize', 20, 'DisplayName', 'Dünya');
-planetM = plot(0, 0, 'r.', 'MarkerSize', 12, 'DisplayName', 'Ay');
-spacecraft = plot(0, 0, 'k.', 'MarkerSize', 8, 'DisplayName', 'Uzay Aracý');
+% Ay ve uzay aracÄ± arasÄ±ndaki mesafe
+r_diff = sqrt( (Y(:,13) - Y(:,7)).^2 + (Y(:,14) - Y(:,8)).^2 );
 
-% Ay yüzeyi dairesi
-theta_circle = linspace(0, 2*pi, 100);
-moon_surface = plot(0, 0, 'r--', 'LineWidth', 1.2, 'DisplayName', 'Ay Yüzeyi');
+[fark, idx] = min(abs(r_diff - r_park_M));
 
-% Ýz takibi
-traj = animatedline('Color', 'g', 'LineWidth', 1.5);
+pos_moon = Y(idx, 7:8);
+vel_moon = Y(idx, 10:11);
+
+pos_sat = Y(idx, 13:14);
+vel_sat = Y(idx, 16:17);
+
+
+% GerÃ§ek o anki Ayâ€“uzay aracÄ± arasÄ± mesafe
+r_current = norm(pos_sat - pos_moon);  % uzay aracÄ±nÄ±n aya gÃ¶re konumunun bÃ¼yÃ¼klÃ¼ÄŸÃ¼
+
+% Ã‡embersel hÄ±z bÃ¼yÃ¼klÃ¼ÄŸÃ¼ (bu irtifada)
+v_circ_mag = sqrt(G * m2 / r_current);
+
+% Tangensiyel birim vektÃ¶r (saat yÃ¶nÃ¼nÃ¼n tersine)
+r_rel_vec = pos_sat - pos_moon;
+r_unit = r_rel_vec / norm(r_rel_vec);
+t_unit = [-r_unit(2), r_unit(1)];
+
+% Gerekli Ã§embersel hÄ±z vektÃ¶rÃ¼
+v_circ = v_circ_mag * t_unit;
+
+% Uzay aracÄ±nÄ±n Ay'a gÃ¶re hÄ±z vektÃ¶rÃ¼
+v_rel = vel_sat - vel_moon;
+
+% Delta-V hesabÄ±
+deltaV = v_circ - v_rel;
+deltaV_mag = norm(deltaV);
+
+% YazdÄ±r
+fprintf('GerÃ§ek irtifada gereken delta-V: %.3f m/s\n', deltaV_mag);
+fprintf('Delta-V vektÃ¶rÃ¼: [%.3f, %.3f] m/s\n', deltaV(1), deltaV(2));
+
+%  Ã‡embersel hÄ±z (o irtifada)
+v_circ_mag = sqrt(G * m2 / r_current);
+r_rel_vec = pos_sat - pos_moon;
+r_unit = r_rel_vec / norm(r_rel_vec);
+t_unit = [r_unit(2), -r_unit(1)];  % Tangensiyel yÃ¶n (saat yÃ¶nÃ¼)
+v_circ = v_circ_mag * t_unit;
+
+%  GÃ¶reli hÄ±z ve delta-V hesabÄ±
+v_rel = vel_sat - vel_moon;
+deltaV = v_circ - v_rel;
+deltaV_mag = norm(deltaV);
+fprintf('GerÃ§ek irtifada gereken delta-V: %.3f m/s\n', deltaV_mag);
+
+%  Yeni hÄ±z (deltaV uygulandÄ±)
+vel_sat_new = vel_sat + deltaV;
+
+%  Yeni baÅŸlangÄ±Ã§ vektÃ¶rÃ¼ (Y formatÄ±nda)
+Y_new = Y(idx, :);
+Y_new(16:17) = vel_sat_new;
+
+%  Yeni simÃ¼lasyon
+T_M_park=2*pi*sqrt((r_current^3)/(G*m2)); % park orbit period
+tspan2 = [0, 2*T_M_park];  % park orbit
+[T2, Y2] = ode45(@SystemsOfEquations, tspan2, Y_new, options);
+
+% 7. GÃ¶rselleÅŸtirme
+figure; hold on; axis equal; grid on;
+plot(Y(:,13), Y(:,14), 'g--', 'DisplayName', 'Ã–nceki YÃ¶rÃ¼nge');
+plot(Y2(:,13), Y2(:,14), 'g', 'LineWidth', 1.5, 'DisplayName', 'Ay YÃ¶rÃ¼ngesi (Yakalama sonrasÄ±)');
+plot(Y2(:,7), Y2(:,8), 'b', 'DisplayName', 'Ay');
+% 8. Delta-V uygulama noktasÄ±
+plot(pos_sat(1), pos_sat(2), 'ro', 'MarkerSize', 1, 'LineWidth', 2, ...
+    'DisplayName', 'Delta-V NoktasÄ±');
+
 legend show;
-
-% Animasyon döngüsü
-for k = 1:50:length(T)
-    % Koordinatlarý al
-    xM = Y(k,7); yM = Y(k,8);
-
-    % Ay yüzey çemberi
-    x_circle = xM + RM * cos(theta_circle);
-    y_circle = yM + RM * sin(theta_circle);
-
-    % Güncellemeler
-    set(planetD, 'XData', Y(k,1),  'YData', Y(k,2));
-    set(planetM, 'XData', xM,      'YData', yM);
-    set(spacecraft, 'XData', Y(k,13), 'YData', Y(k,14));
-    set(moon_surface, 'XData', x_circle, 'YData', y_circle);
-    addpoints(traj, Y(k,13), Y(k,14));
-    drawnow;
-    pause(0.06);
-end
-%% --- UZAY ARACI MERKEZLÝ ANÝMASYON ---
-figure;
-hold on; grid on;
-axis equal;
 xlabel('x [m]'); ylabel('y [m]');
-title('Uzay Aracý Merkezli Animasyon');
+title('2. Delta-V SonrasÄ± Uzay AracÄ±nÄ±n Ay YÃ¶rÃ¼ngesi');
 
-xlim([-2e7 2e7]);  % Kamera alanýný küçültebilirsin
-ylim([-2e7 2e7]);
-
-% Grafik objeleri
-planetD = plot(0, 0, 'b.', 'MarkerSize', 20, 'DisplayName', 'Dünya');
-planetM = plot(0, 0, 'r.', 'MarkerSize', 12, 'DisplayName', 'Ay');
-moon_surface = plot(0, 0, 'r--', 'LineWidth', 1.2, 'DisplayName', 'Ay Yüzeyi');
-traj = animatedline('Color', 'g', 'LineWidth', 1.5);
-legend show;
-
-% Ay yüzeyi çemberi (relatif çizilecek)
-theta_circle = linspace(0, 2*pi, 100);
-spacecraft = plot(0, 0, 'ko', 'MarkerSize', 6, 'MarkerFaceColor', 'k', 'DisplayName', 'Uzay Aracý');
-for k = 1:50:length(T)
-
-
-    % Mevcut uzay aracý konumu
-    x_sc = Y(k,13); y_sc = Y(k,14);
-
-    % Diðer cisimlerin uzay aracýna göre konumu
-    xD = Y(k,1) - x_sc;  yD = Y(k,2) - y_sc;
-    xM = Y(k,7) - x_sc;  yM = Y(k,8) - y_sc;
-
-    % Ay yüzey çemberi (Ay merkezli çiz, uzay aracýna göre konumlandýr)
-    x_circle = xM + RM * cos(theta_circle);
-    y_circle = yM + RM * sin(theta_circle);
-
-    % Güncellemeler
-    set(planetD, 'XData', xD, 'YData', yD);
-    set(planetM, 'XData', xM, 'YData', yM);
-    set(moon_surface, 'XData', x_circle, 'YData', y_circle);
-    addpoints(traj, 0, 0);  % Uzay aracý hep merkezde (0,0)
-    drawnow;
-    pause(0.06);
-end
