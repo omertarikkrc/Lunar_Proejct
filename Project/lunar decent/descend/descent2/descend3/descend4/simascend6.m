@@ -1,0 +1,137 @@
+% lunar_ascent_and_plot.m
+clc; clear; close all;
+
+%% 1) Parametreler ve Başlangıç Kütlesi
+params;  % params.m içinde tanımlı global sabitleri yükler
+global m_dry Isp g0 mu_moon R_moon
+
+m_fuel0 = 5500;            % [kg] kalkıştaki yakıt miktarı 
+m0      = m_dry + m_fuel0; % [kg] toplam kütle
+
+%% 2) Thrust Aralığı ve En İyi Thrust’u Bulma
+T_range = 1000:1000:50000;   % [N]
+results  = nan(numel(T_range),5);
+finalY   = cell(numel(T_range),1);
+Y_best   = [];  T_best = [];
+
+for i = 1:numel(T_range)
+    T      = T_range(i);
+    state0 = [R_moon; 0; 0; 0; m0];  % [x; y; vx; vy; m]
+    opts   = odeset('Events', @event_orbit_reached);
+
+    [~, Y] = ode45(@(t,Y) ascent_dynamics_pitch(t,Y,T), [0 1000], state0, opts);
+
+    % Eğer hedefe çıkmadıysa
+    if norm(Y(end,1:2)) < R_moon + 260e3 - 1
+        results(i,:) = [T, NaN, NaN, NaN, 0];
+        continue;
+    end
+
+    % Çıkış koşulları
+    r_vec       = Y(end,1:2)';
+    v_vec       = Y(end,3:4)';
+    m_exit      = Y(end,5);
+    fuel_remain = m_exit - m_dry;
+
+    [succ, dv, fuel_need, ~,~, v_new] = ...
+        compute_delta_v_and_fuel(r_vec, v_vec, m_exit);
+
+    results(i,:) = [T, dv, fuel_need, fuel_remain, succ];
+    finalY{i}    = [r_vec; v_new; m_exit - fuel_need];
+
+    % İlk başarılı asansiyonu sakla
+    if succ && isempty(Y_best)
+        Y_best = Y;
+        T_best = T;
+    end
+end
+
+% En iyi sonucu seç
+valid = results(results(:,5)==1,:);
+if isempty(valid)
+    error('Hiçbir thrust değeri başarılı olamadı.');
+end
+[~, idx] = min(valid(:,3));
+bestT    = valid(idx,1);
+fprintf('→ En iyi thrust: %.0f N\n→ Δv needed: %.2f m/s\n→ Fuel needed: %.2f kg\n→ Fuel remain: %.2f kg\n kalan yakıt(Fuel needed- Fuel remain): %.2f kg\n eğer bu yazı varsa aya 5500 kg  yakıtla iniş iniş yapamamışımdır\n bu görev 5500 kg yakıt varsayımı ile yapılmıştır \n neden 5500 kg yakıt sorusunu simascend4 kodunu çalıştırarak bulunabilir\n Gerekli 1500 kg yakıt ay yüzeyindeki su ve hidrojenlerden elde edilmediği sürece bu görev başarısızdır.\n zaten kalan yakıt miktarı 5.59kg  ', ...
+        bestT, valid(idx,2), valid(idx,3), valid(idx,4),valid(idx,4)-valid(idx,3));
+
+%% 3) Kalkış + Yörüngeyi Tek Plot’ta Göster
+% Eğer Y_best boşsa yeniden simüle et
+if isempty(Y_best)
+    opts = odeset('Events', @event_orbit_reached);
+    [~, Y_best] = ode45(@(t,Y) ascent_dynamics_pitch(t,Y,bestT), [0 1000], [R_moon;0;0;0;m0], opts);
+end
+
+% İmpulsif Δv sonrası yeni durum
+state_new = finalY{find(T_range==bestT,1)};
+
+% Itkisiz orbit propagasyonu (2 tur)
+r0_orb = norm(state_new(1:2));
+v0_orb = norm(state_new(3:4));
+T_orb  = 2*pi*r0_orb / v0_orb;   % tek tur süresi
+
+T_tot  =  T_orb;             % iki tur
+
+[~, Y_orb] = ode45(@orbit_propagation, [0 T_tot], state_new);
+
+% Plot
+figure; hold on; axis equal; grid on;
+theta = linspace(0,2*pi,400);
+plot(R_moon*cos(theta), R_moon*sin(theta), 'k', 'LineWidth',1.5);         % Ay yüzeyi
+plot(Y_best(:,1), Y_best(:,2), 'r-', 'LineWidth',1.8);                    % Ascent yörünesi
+plot(Y_orb(:,1), Y_orb(:,2), 'b-', 'LineWidth',1);                        % circular park orbit 
+plot(Y_orb(1,1), Y_orb(1,2), 'ko', 'LineWidth',1.8);                      % circular park orbite geçiş için deltav noktası 
+plot(Y_orb(end,1), Y_orb(end,2), 'k>', 'LineWidth',1.8);                  % circular orbit son nokta
+
+xlabel('x [m]'); ylabel('y [m]');
+title('Ay Yüzeyinden Kalkış ve 260 km Circular Orbit');
+legend('Ay Yüzeyi','Ascent Trajectory',' Circular Park  Orbit (260 km irtifa)',' deltav noktası','circular orbit son nokta','Location','Best');
+
+%% --- Local Functions ---
+
+function dYdt = ascent_dynamics_pitch(t, Y, T)
+    global Isp g0 mu_moon m_dry
+    x=Y(1); y=Y(2); vx=Y(3); vy=Y(4); m=Y(5);
+    r_vec = [x; y]; r = norm(r_vec);
+    r_hat = r_vec/r; tang = [-r_hat(2); r_hat(1)];
+    w = 0.5*(1 + tanh(0.02*(t - 150)));  % pitch ilerlemesi (0→150→300 s arası)
+    dir = ((1-w)*r_hat + w*tang); dir=dir/norm(dir);
+    if m>m_dry && T>0
+        dm = -T/(Isp*g0);
+    else
+        dm = 0; T=0;
+    end
+    a_th = T/m * dir;
+    a_gr = -mu_moon/r^2 * r_hat;
+    dYdt = [vx; vy; a_th(1)+a_gr(1); a_th(2)+a_gr(2); dm];
+end
+
+function [value, isterm, direction] = event_orbit_reached(~, Y)
+    global R_moon
+    value      = norm(Y(1:2)) - (R_moon + 260e3);
+    isterm     = 1;     % durdur
+    direction  = +1;    % artan yönde
+end
+
+function [success, dv, fuel, v_circ_vec, dv_vec, v_new] = ...
+         compute_delta_v_and_fuel(r_vec, v_vec, m_exit)
+    global mu_moon Isp g0 m_dry
+    r = norm(r_vec); r_hat = r_vec/r; tang = [-r_hat(2); r_hat(1)];
+    v_circ    = sqrt(mu_moon/r); v_circ_vec = v_circ*tang;
+    dv_vec    = v_circ_vec - v_vec; dv = norm(dv_vec);
+    if dv<=0
+        success=true; fuel=0; v_new=v_vec; return;
+    end
+    m_after   = m_exit * exp(-dv/(Isp*g0));
+    fuel      = m_exit - m_after;
+    success   = (m_after >= m_dry);
+    v_new     = v_vec + dv_vec;
+end
+
+function dYdt = orbit_propagation(~, Y)
+    global mu_moon
+    r = norm(Y(1:2));
+    a = -mu_moon/r^3 * Y(1:2);
+    dYdt = [Y(3); Y(4); a(1); a(2); 0];
+end

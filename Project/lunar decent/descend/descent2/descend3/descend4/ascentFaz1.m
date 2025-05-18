@@ -1,0 +1,131 @@
+clc;
+clear;
+close all;
+
+%% Parametreler
+params;
+global m_dry Isp g0 mu_moon R_moon
+
+%% Başlangıç Kütlesi
+m_fuel0 = 4000;            % Yakıt kütlesi [kg] (örnek)
+m0 = m_dry + m_fuel0;     % Toplam kütle
+
+%% Başlangıç Koşulları
+r0 = [R_moon; 0];          % (rmoon,0) ilk konum 
+v0 = [0; 0];               % ilk hız yok 
+state0 = [r0; v0; m0];     % [x; y; vx; vy; m]
+
+%% Simülasyon Süresi
+Tmax = 1000;                % maksimum süre [s]
+
+%% ODE Çözümü
+options = odeset('Events', @event_orbit_reached);
+[t, Y] = ode45(@ascent_dynamics_pitch, [0 Tmax], state0, options);
+
+%% Plot
+figure; hold on; grid on; axis equal;
+plot(Y(:,1), Y(:,2), 'b');
+plot(R_moon*cos(linspace(0,2*pi,200)), R_moon*sin(linspace(0,2*pi,200)), 'k-');
+
+% --- Simülasyon sonunda konum ve yön vektörleri
+final_pos = Y(end,1:2)';   % [x; y]
+r_vec = final_pos;
+r_hat = r_vec / norm(r_vec);
+tang_hat = [-r_hat(2); r_hat(1)];
+
+% --- Vektör çizim ölçeği
+vec_scale = 0.15 * norm(final_pos);  % boyut ayarı
+
+% --- Vektör çizimi
+quiver(final_pos(1), final_pos(2), r_hat(1)*vec_scale, r_hat(2)*vec_scale, 0, 'r', 'LineWidth',2, 'MaxHeadSize',2);
+quiver(final_pos(1), final_pos(2), tang_hat(1)*vec_scale, tang_hat(2)*vec_scale, 0, 'g', 'LineWidth',2, 'MaxHeadSize',2);
+
+xlabel('x [m]'); ylabel('y [m]');
+title('Ay Yüzeyinden Kalkış (Pitch Programlı)');
+legend('Yörünge','Ay Yüzeyi','r\_hat (radial)','tang\_hat (teğetsel)','Location','best');
+
+%% Ek Bilgi: irtifa ve hızlar
+irtifa = norm(r_vec) - R_moon;
+v_vec = Y(end,3:4)';
+v_exit = norm(v_vec);
+r_exit = norm(r_vec);
+m_exit = Y(end,5);
+
+[success, delta_v, fuel_needed] = compute_delta_v_and_fuel(v_exit, r_exit, m_exit);
+
+if success
+    fprintf('Başarılı! Gerekli Δv = %.2f m/s, Yakıt ihtiyacı = %.2f kg\n', delta_v, fuel_needed);
+else
+    fprintf('Başarısız! Gerekli Δv = %.2f m/s, Yakıt ihtiyacı = %.2f kg (yetmiyor)\n', delta_v, fuel_needed);
+end
+
+%% Pitch'li Dinamikler
+function dYdt = ascent_dynamics_pitch(t, Y)
+    global Isp g0 mu_moon m_dry   
+
+    x = Y(1); y = Y(2);
+    vx = Y(3); vy = Y(4);
+    m  = Y(5);
+
+    r_vec = [x; y];
+    r = norm(r_vec);
+    r_hat = r_vec / r;
+    tang_hat = [-r_hat(2); r_hat(1)];
+
+    % Pitch profili (örnek: 0-300s arası tanh geçişi)
+    t1 = 0; t2 = 300;        % geçiş süresi
+    s = 0.02;                % tanh geçiş hızı
+    w = 0.5 * (1 + tanh(s*(t - (t1 + t2)/2)));
+    thrust_dir = (1 - w) * r_hat + w * tang_hat;
+    thrust_dir = thrust_dir / norm(thrust_dir);
+
+    % Sabit thrust (örnek)
+    T = 20000;  % [N]
+
+    % Yakıt akışı
+    if m > m_dry && T > 0
+        mdot = T / (Isp * g0);
+        dm = -mdot;
+    else
+        T = 0; dm = 0;
+    end
+
+    a_thrust = T / m * thrust_dir;
+    a_gravity = -mu_moon / r^2 * r_hat;
+    a_total = a_thrust + a_gravity;
+
+    dYdt = [vx;
+            vy;
+            a_total(1);
+            a_total(2);
+            dm];
+end
+
+%% Event: 260 km irtifaya ulaşıldı mı?
+function [value, isterminal, direction] = event_orbit_reached(~, Y)
+    global R_moon
+    r = norm(Y(1:2));
+    value = r - (R_moon + 260e3);
+    isterminal = 1;  % durdur
+    direction = +1;
+end
+
+%% Δv ve yakıt kontrol fonksiyonu
+function [success, delta_v, fuel_needed] = compute_delta_v_and_fuel(v_exit, r_exit, m_exit)
+    global mu_moon Isp g0 m_dry
+
+    v_circ = sqrt(mu_moon / r_exit);     % Gerekli dairesel hız
+    delta_v = v_circ - v_exit;           % Eksik hız
+
+    if delta_v <= 0
+        success = true;
+        fuel_needed = 0;
+        return;
+    end
+
+    % Roket denkleminden gereken yakıt
+    m_after = m_exit * exp(-delta_v / (Isp * g0));
+    fuel_needed = m_exit - m_after;
+
+    success = (m_after >= m_dry);
+end
